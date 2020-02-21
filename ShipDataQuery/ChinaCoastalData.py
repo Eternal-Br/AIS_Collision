@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 # author: lph time:2019/5/5
-import json
 import csv
 import time
+
+import pandas as pd
 from pymongo import MongoClient
+from datetime import datetime
 from ShipDataQuery.ComplexEncoder import ComplexEncoder
+
 """
     研究区域:
             (Longitude, Latitude)
@@ -35,61 +38,49 @@ from ShipDataQuery.ComplexEncoder import ComplexEncoder
 # 使用mongodb登录
 client = MongoClient('localhost', 27017)
 # 数据库database: ais_motor
-db = client.ChinaCoastalData
+db = client.ais6
 # 集合collection: test_motor
-collection = db.chinacoastaldata
+collection = db.tracks1_
 
 # 开始时间
 start = time.time()
 
-results = collection.find({
-    "TIME": {
-        "$gte": "2016-10-01",
-        "$lt": "2016-10-02"
-    },
-    "location": {
-        "$geoWithin": {
-            "$geometry": {
-                "type": "Polygon",
-                "coordinates": [
-                    [
-                        [120, 30],
-                        [125, 30],
-                        [125, 35],
-                        [120, 35],
-                        [120, 30]
-                    ]
-                ]
-            }
-        }
+# 使用aggregate()方法
+results = collection.aggregate([{
+    "$match": {
+        "update_time": {
+            "$gte": datetime(2016, 1, 1),
+            "$lte": datetime(2016, 1, 31)
+        },
+        "location": {"$geoWithin": {"$geometry": {
+            "type": "Polygon",
+            "coordinates": [[
+                [122.1, 30.6],
+                [122.6, 30.6],
+                [122.6, 31.2],
+                [122.1, 31.2],
+                [122.1, 30.6]
+            ]]
+        }}}
     }
-}, {"_id": 0})
-
-
-"""
-# 使用.json格式储存Polygon中的船舶AIS数据
-将查询结果写入ChinaCoastalData.json
-ship_info = [{"MMSI": result["MMSI"], "TIME": result["TIME"], "LON": result["location"]["coordinates"][0],
-              "LAT": result["location"]["coordinates"][1], "COG": result["COG"], "SOG": result["SOG"]}
-             for result in results]
-with open('./ChinaCoastalData/2016_10_01.json', 'w') as file_object:
-    json.dump(ship_info, file_object, cls=ComplexEncoder)
-"""
-
+}])
 
 # 使用.csv格式存储Polygon中的船舶AIS数据
-with open('./ChinaCoastalData/2016_10_01_test.csv', 'w') as f_write:
+with open('../DataProcess/2016-Meta-Data/ais6-2016-01.csv', 'w') as f_write:
     datas = csv.writer(f_write)
-    Header = ["MMSI", "TIME", "LON", "LAT", "COG", "SOG"]
+    Header = ["MMSI", "NAME", "TIME", "LON", "LAT", "COG", "SOG", "LENGTH", "WIDTH"]
     datas.writerow(Header)
     for result in results:
         datas.writerow([
-            result["MMSI"],
-            result["TIME"],
+            result["mmsi"],
+            result["name"],
+            result["update_time"],
             result["location"]["coordinates"][0],
             result["location"]["coordinates"][1],
-            result["COG"],
-            result["SOG"]
+            result["course"],
+            result["speed"],
+            result["length"],
+            result["width"]
         ])
 
 # 结束时间
@@ -102,4 +93,3 @@ print("*********The Work is done!***********")
 print("The total Time is {}!".format(total))
 # print("The query has {} documents!".format(len(ship_info)))
 print("-------------------------------------")
-
